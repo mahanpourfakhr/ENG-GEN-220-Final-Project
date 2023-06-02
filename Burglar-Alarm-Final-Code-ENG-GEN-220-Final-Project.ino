@@ -1,0 +1,99 @@
+/*
+This is the code for the burgler alarm with the ultrosonic sensor
+By Mahan P & Zayed S
+*/
+
+// Necessary libraries
+#include <SoftwareSerial.h>
+#include "DFRobotDFPlayerMini.h" 
+
+// Setting the trig and echo pins of the ultrasonic sensor
+const int Trig = 10; // Put the Digital pin number on the arduino board for the output
+const int Echo = 9; // Put the Digital pin number on the arduino board for the input
+
+const int BUTTON_PIN = 3; // Puts the digital pin 3 for the pushbutton
+
+SoftwareSerial mySoftwareSerial(4, 5); // Using arduino pins 4 & 5 for the DF player
+DFRobotDFPlayerMini mp3module; // Declaring the mp3module
+const byte pinDfpBusy = 6; // For the "busy" pin of the DFPlayer, it can be used to see if a song is playing or not.
+
+
+int distance; // Holds the distance value for the ultrasonic sensor
+int duration; // Holds the duration value for the ultrasonic sensor
+int buttonState = 0; // Original state of the button (when not pressed) is zero
+int counter = 1; // A counter to determine what song to play 
+
+const int dectection_dist = 75; // Detection distance range (can be changed to any value)
+
+const int reload = 1; // Setting the realod time (how long it takes for the system to start detecintg again) in seconds
+
+
+// The distance function to calculate the distance from the ultrasonic sensor data/inputs
+void get_distance(){
+  digitalWrite(Trig, LOW); // Clears the digital pin
+  delayMicroseconds(2);
+  digitalWrite(Trig, HIGH); // Sets the trig pin ON 
+  delayMicroseconds(10); 
+  digitalWrite(Trig, LOW); // Sets it back to low
+
+  duration = pulseIn(Echo, HIGH);
+  distance = duration * 0.034 / 2; // We use 0.034 as the speed of the pulese (wave) that was sent and we divide by two because we only care about the one way travel
+  Serial.print((String)"Distance is: " + distance + " cm\n"); // Outputs the distance to the serial monitor (it can also be used to output to a screen if you have one)
+}
+
+void setup() {
+  Serial.begin(9600); // Essentially starts up the singal/communication with the arduino
+  pinMode(BUTTON_PIN, INPUT_PULLUP); // Sets the input of the button and sets the default to high (pullup)
+
+  mySoftwareSerial.begin(9600); // Starts up communication wiht the DFPlayer
+  pinMode(Trig, OUTPUT); // Declare the Trig as an output
+  pinMode(Echo, INPUT); // Declare the Echo as an input
+
+  Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
+  
+  if (!mp3module.begin(mySoftwareSerial)) { 
+    Serial.println("Unable to connect to module!");
+    Serial.println("Check cable connections & make sure SD Card is inserted");
+    while(1); // Repeats this until it connects
+  }
+  Serial.println("Succesfully connected to DFPlayer Mini!");
+
+  mp3module.setTimeOut(500); // Set serial communictaion time out to 500 ms
+  mp3module.volume(25);  // Set volume value (0-30)
+  mp3module.EQ(DFPLAYER_EQ_NORMAL); // Set equalization to normal
+  mp3module.outputDevice(DFPLAYER_DEVICE_SD); // Read music from MicroSD card
+}
+
+void loop() {
+  do{ 
+    byte buttonState = digitalRead(BUTTON_PIN); // Detects if the button is pressed or not
+    if (buttonState == LOW && counter <= 3){
+        counter++; 
+        Serial.println((String)"Button was pressed, " + "playing song " + counter + "\n");
+
+    } else if (buttonState == LOW && counter > 3) {
+        counter = 1;
+        Serial.println((String)"Button was pressed, " + "playing song " + counter + "\n");
+    }
+    delay(500); // adds an initial delay
+    get_distance(); // gets the distance
+    Serial.print("\n");
+
+  } while (distance > dectection_dist); // repeats the loop as long as the distance is bigger then the detection distance
+
+      delay(100); // adds a bit of delay if anything is detected. AKA if the distance is less then the detection distance
+      Serial.println("We caught the robber");
+      mp3module.play(counter);
+
+    do {
+      delay(500);
+      Serial.println("Waiting till song finish");
+    } while (digitalRead(pinDfpBusy) == LOW); // 
+  
+  // after this delay it will repeat the void loop
+  delay (reload*100); // must be multiplied by 1000 cause we are using mili seconds
+}
+
+
+
+
